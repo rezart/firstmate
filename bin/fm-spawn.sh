@@ -510,6 +510,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-role-profile-lib.sh
+. "$SCRIPT_DIR/fm-role-profile-lib.sh"
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
@@ -794,7 +796,19 @@ spawn_remote_secondmate() {
   elif [ -n "$positional" ]; then
     harness=$positional
   else
-    harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+    ROLE_SCOPE=$(secondmate_registry_field "$DATA/secondmates.md" "$id" scope 2>/dev/null || true)
+    ROLE_PROFILE=$(fm_role_profile_resolve secondmate "$ROLE_SCOPE") || {
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      return 2
+    }
+    ROLE_TAB=$(printf '\t')
+    ROLE_HARNESS=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    ROLE_PROFILE=${ROLE_PROFILE#*"$ROLE_TAB"}
+    ROLE_MODEL=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    ROLE_PROFILE=${ROLE_PROFILE#*"$ROLE_TAB"}
+    ROLE_EFFORT=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    if [ -n "$ROLE_HARNESS" ]; then harness=$ROLE_HARNESS; else harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate); fi
   fi
   case "$harness" in
   claude | codex | opencode | pi | pi-signed | grok | kimi | cursor) ;;
@@ -809,12 +823,10 @@ spawn_remote_secondmate() {
   effort=${EFFORT:--}
   if [ -z "$HARNESS_ARG" ] && [ -z "$positional" ]; then
     if [ "$MODEL_SET" -eq 0 ]; then
-      model=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-      [ -n "$model" ] || model=-
+      if [ -n "${ROLE_MODEL:-}" ]; then model=$ROLE_MODEL; else model=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model); [ -n "$model" ] || model=-; fi
     fi
     if [ "$EFFORT_SET" -eq 0 ]; then
-      effort=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-      [ -n "$effort" ] || effort=-
+      if [ -n "${ROLE_EFFORT:-}" ]; then effort=$ROLE_EFFORT; else effort=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort); [ -n "$effort" ] || effort=-; fi
     fi
   fi
   # A remote second mate always runs on Herdr: its server belongs to the host's
@@ -1921,8 +1933,21 @@ case "$ARG3" in
   # The launch_template lookup below is the unverified-adapter guard for both
   # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
-    harness_src='config/secondmate-harness (falling back to config/crew-harness)'
+    ROLE_SCOPE=$(secondmate_registry_field "$DATA/secondmates.md" "$ID" scope 2>/dev/null || true)
+    ROLE_PROFILE=$(fm_role_profile_resolve secondmate "$ROLE_SCOPE") || exit 1
+    ROLE_TAB=$(printf '\t')
+    ROLE_HARNESS=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    ROLE_PROFILE=${ROLE_PROFILE#*"$ROLE_TAB"}
+    ROLE_MODEL=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    ROLE_PROFILE=${ROLE_PROFILE#*"$ROLE_TAB"}
+    ROLE_EFFORT=${ROLE_PROFILE%%"$ROLE_TAB"*}
+    if [ -n "$ROLE_HARNESS" ]; then
+      HARNESS=$ROLE_HARNESS
+      harness_src='role-profile'
+    else
+      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+      harness_src='config/secondmate-harness (falling back to config/crew-harness)'
+    fi
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
       echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
@@ -2019,24 +2044,26 @@ agy)
   ;;
 esac
 
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
-# here on every spawn makes the pin durable across respawns. Precedence: explicit
-# --model/--effort flags still win over the file's tokens.
 if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
   if [ "$MODEL_SET" -eq 0 ]; then
-    SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-    [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
+    if [ -n "${ROLE_MODEL:-}" ]; then
+      MODEL=$ROLE_MODEL
+    else
+      SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
+      [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
+    fi
   fi
   if [ "$EFFORT_SET" -eq 0 ]; then
-    SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-    if [ -n "$SM_EFFORT" ]; then
-      case "$SM_EFFORT" in
-      low | medium | high | xhigh | max | ultra) EFFORT=$SM_EFFORT ;;
-      *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max, ultra; ignoring" >&2 ;;
-      esac
+    if [ -n "${ROLE_EFFORT:-}" ]; then
+      EFFORT=$ROLE_EFFORT
+    else
+      SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
+      if [ -n "$SM_EFFORT" ]; then
+        case "$SM_EFFORT" in
+        low | medium | high | xhigh | max | ultra) EFFORT=$SM_EFFORT ;;
+        *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max, ultra; ignoring" >&2 ;;
+        esac
+      fi
     fi
   fi
 fi

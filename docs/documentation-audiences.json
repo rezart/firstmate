@@ -513,6 +513,18 @@
       "audience": "public-product"
     },
     {
+      "path": ".agents/skills/project-director/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "docs/project-director.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/examples/role-profiles.json",
+      "audience": "operator-example"
+    },
+    {
       "path": "tests/captures/no-mistakes-v1.70.1/README.md",
       "audience": "maintainer-verification"
     }

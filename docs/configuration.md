@@ -483,6 +483,18 @@ Missing `jq` is reported through the normal `MISSING: jq` install-consent flow.
 While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
+## Role profiles (config/role-profiles.json)
+
+`config/role-profiles.json` is an optional local, gitignored file that assigns each orchestration role - `director`, `reviewer`, `crew`, `scout`, `firstmate`, `secondmate`, and scoped `secondmate.<scope>` entries - its own harness, model, and effort.
+`bin/fm-role-profile-lib.sh` is the single owner of the resolution contract; [docs/project-director.md](project-director.md) owns how the Project Director consumes worker roles at dispatch time.
+Every axis is optional, and when the file is absent the library resolves nothing and callers pass no new flags, so existing dispatch through `config/crew-dispatch.json`, `config/crew-harness`, and `config/secondmate-harness` keeps working byte-identically.
+Per axis the precedence is: an explicit `FM_ROLE_HARNESS` / `FM_ROLE_MODEL` / `FM_ROLE_EFFORT` override, then the role's profile entry, then unset - and an unset axis falls back to Firstmate's existing static resolution instead of inventing a value.
+A `secondmate` launch normalizes its registry's natural-language scope to the lowercase slug in `secondmate.<scope>`, then falls through to `secondmate` and `firstmate`, most specific first; its resolved axes override only the corresponding launch axis and leave the static pin responsible for every unset axis.
+Roles constrain harness classes exactly as [harness support](#harness-support) defines them: `director`, `reviewer`, `crew`, and `scout` accept every verified harness including the crewmate-only ones, while `firstmate` and `secondmate` accept primary-capable harnesses only, and an invalid combination is reported and refused rather than ignored.
+Every configured key must be one of those roles or `secondmate.<lowercase-scope>` and every configured axis must be a string.
+See [`docs/examples/role-profiles.json`](examples/role-profiles.json) for a starting point.
+The `firstmate` role cannot switch an already-running session; it contributes only through a launched secondmate's fallback chain.
+
 ## Typed dispatch resolution (.env TYPESAFE_API_KEY)
 
 `bin/fm-dispatch-resolve.sh` resolves one concrete crewmate or scout profile from a written brief with typesafe.ai's System One model (Jev), so the rule match that firstmate otherwise reasons out in its own context becomes one short tool turn.

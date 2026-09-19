@@ -515,6 +515,27 @@ test_spawn_split_and_inherit() {
   pass "B2 spawn: secondmate runs the secondmate harness; its home inherits declared config"
 }
 
+test_spawn_role_profile_overrides_static_pin() {
+  local w sm meta
+  w="$TMP_ROOT/spawn-role-profile"
+  sm="$w/sm"
+  mkdir -p "$w/home/config"
+  printf 'claude\n' > "$w/home/config/secondmate-harness"
+  printf '{"roles":{"secondmate":{"harness":"codex","model":"profile-model","effort":"high"}}}\n' > "$w/home/config/role-profiles.json"
+  make_seeded_home "$sm" sm
+
+  spawn_secondmate "$w" sm "$sm"
+
+  meta="$w/home/state/sm.meta"
+  [ "$(meta_harness "$meta")" = codex ] \
+    || fail "role profile: launched on '$(meta_harness "$meta")', expected codex"
+  grep -q '^model=profile-model$' "$meta" \
+    || fail "role profile: secondmate meta omitted profile model"
+  grep -q '^effort=high$' "$meta" \
+    || fail "role profile: secondmate meta omitted profile effort"
+  pass "B2a spawn: secondmate role profile overrides static runtime pin"
+}
+
 # Backward-compat: secondmate-harness absent -> the secondmate launches on the
 # crew harness, exactly as before this knob existed, and that crew value is the
 # one inherited.
@@ -2635,6 +2656,7 @@ test_pi_signed_detection_and_session_lock_identity
 test_dash_leading_process_names_are_basename_operands
 test_propagate_lib
 test_spawn_split_and_inherit
+test_spawn_role_profile_overrides_static_pin
 test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins

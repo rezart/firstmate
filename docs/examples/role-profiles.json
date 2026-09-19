@@ -1,0 +1,11 @@
+{
+  "roles": {
+    "director":   {"harness": "codex", "model": "gpt-5.6", "effort": "high"},
+    "reviewer":   {"harness": "codex", "model": "gpt-5.6", "effort": "high"},
+    "crew":       {"harness": "claude", "model": "sonnet", "effort": "medium"},
+    "scout":      {"harness": "claude", "model": "haiku", "effort": "low"},
+    "firstmate":  {"harness": "claude", "model": "sonnet", "effort": "medium"},
+    "secondmate": {"harness": "codex", "model": "gpt-5.5", "effort": "medium"},
+    "secondmate.backend": {"harness": "codex", "model": "gpt-5.6", "effort": "xhigh"}
+  }
+}
